@@ -1604,7 +1604,7 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_32_fused(
     wmma::fill_fragment(acc_frag, 0.0f);
     
     for(int i = 0; i < windows_size; i++){
-        // 加载weights到sparse_A中：8*hidden_embedding_dim
+
         for(int j = wid; j < BLK_W; j += WPB){
             unsigned source_idx = (i * BLK_W + j) * hidden_dim + laneid;
             unsigned target_idx = j + laneid * BLK_W;
@@ -2079,7 +2079,7 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_final_fused(
         }
     }
     wmma::fill_fragment(acc_frag, 0.0f);
-    // 加载weights到sparse_A中：8*hidden_embedding_dim
+
     // int row_end = ((embedding_dim + 7) / 8) * 8;
     // __syncthreads();
     for(int i = 0; i < windows_size; i++){
@@ -2330,7 +2330,7 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_final_fused_64(
         }
     }
     wmma::fill_fragment(acc_frag, 0.0f);
-    // 加载weights到sparse_A中：8*hidden_embedding_dim
+
     // int row_end = ((embedding_dim + 7) / 8) * 8;
     // __syncthreads();
     for(int i = 0; i < windows_size; i++){
@@ -2724,7 +2724,7 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_GIN_final_fused(
 //         }
 //     }
 //     wmma::fill_fragment(acc_frag, 0.0f);
-//     // 加载weights到sparse_A中：8*hidden_embedding_dim
+
 //     for(int i = wid; i < BLK_W; i += WPB){
 //         unsigned source_idx = i * hidden_dim + laneid;
 //         unsigned target_idx = i + laneid * BLK_W;
@@ -2753,12 +2753,12 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_GIN_final_fused(
     
 //     __syncthreads();
 //     int order[] = {0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15};
-//     // 为计算X*res, 先将dense_X的res部分转换位置, 至sparse_A
+
 //     for(int i = wid; i < BLK_H; i += WPB){
 //         unsigned target_id = (i % 2) * 4 + laneid / 8 + (laneid % 8 + 8 * ((i % 4) / 2)) * BLK_W + BLK_H * BLK_W * (i / 4);
 //         sparse_A[target_id] = dense_X[order[i] * embedding_dim + laneid];
 //     }
-//     // 加载X至dense_X
+
 //     for(int i = wid; i < BLK_H; i += WPB){
 //         unsigned source_id = (bid * BLK_H + i) * embedding_dim + laneid;
 //         unsigned target_id = (i / 8 + (laneid / 16) * 2) * BLK_H * BLK_W + (laneid % BLK_H) * BLK_W + i % BLK_W;
@@ -2766,7 +2766,6 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_GIN_final_fused(
 //     }
 //     __syncthreads();
 //     wmma::fill_fragment(acc_frag, 0.0f);
-//     // 该循环还有优化空间
 //     for(int i = 0; i < 2; i++){
 //         for(int j = 0; j < 2; j++){
 //             if (wid < dimTileNum) {
