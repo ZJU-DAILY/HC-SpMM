@@ -27,9 +27,6 @@ parser.add_argument("--single_kernel", action='store_true', help="whether to pro
 args = parser.parse_args()
 print(args)
 
-#########################################
-## Load Graph from files.
-#########################################
 dataset = args.dataset
 path = osp.join("../", dataset + ".txt")
 dataset = HYGNN_dataset(path, args.dim, args.classes, load_from_txt=True)
@@ -38,9 +35,6 @@ num_edges = dataset.num_edges
 column_index =  dataset.column_index 
 row_pointers = dataset.row_pointers
 
-#########################################
-## Compute TC-GNN related graph MetaData.
-#########################################
 num_row_windows = (num_nodes + BLK_H - 1) // BLK_H
 edgeToColumn = torch.zeros(num_edges, dtype=torch.int)
 edgeToRow = torch.zeros(num_edges, dtype=torch.int)
@@ -50,7 +44,6 @@ row_nzr = torch.zeros(num_row_windows + 1, dtype=torch.int)
 col_nzr = torch.zeros(16 * num_row_windows, dtype=torch.int)
 output = torch.zeros(num_nodes * args.hidden, dtype=torch.float).reshape(num_nodes, args.hidden)
 
-# preprocessing for generating meta-information
 start = time.perf_counter()
 HYGNN.preprocess(column_index, row_pointers, num_nodes,  \
                 BLK_H,	BLK_W, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
@@ -67,9 +60,6 @@ row_nzr = row_nzr.cuda()
 col_nzr = col_nzr.cuda()
 output = output.cuda()
 
-#########################################
-## Single Satter-And-Gather (SAG) Profiling.
-#########################################
 if args.single_kernel:
     SAG_obj = SAG(row_pointers, column_index,\
                     blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
@@ -79,9 +69,7 @@ if args.single_kernel:
         # exit(0)
     # print(prof.key_averages().table(sort_by="cuda_time_total"))
     exit(0)
-#########################################
-## Build GCN and AGNN Model
-#########################################
+
 if args.model == "gcn":
     class Net(torch.nn.Module):
         def __init__(self):
@@ -133,7 +121,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model, dataset = Net().to(device), dataset.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# Training 
 def train():
     # start = time.perf_counter()
     model.train()
