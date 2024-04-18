@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import torch
 import sys
 import math
@@ -24,7 +23,7 @@ def gen_test_tensor(X_prime):
     return X_new
 
 
-class TCGNNFunction_SAG(torch.autograd.Function):
+class HyGNNFunction_SAG(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, row_pointers, column_index, \
                 blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
@@ -58,7 +57,7 @@ class TCGNNFunction_SAG(torch.autograd.Function):
         return d_input, None, None, None, None, None, None
 
 
-class TCGNNFunction(torch.autograd.Function):
+class HyGNNFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         # X = torch.sparse.mm(edge_coo, X)
@@ -89,122 +88,67 @@ class TCGNNFunction(torch.autograd.Function):
     def backward(ctx, d_output):
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
         real_embedding_dim = rd
-        # SPMM backward propaAGNNion.
-        # start = time.perf_counter()
         d_input_prime = HYGNN.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        # torch.cuda.synchronize()
-        # dur = time.perf_counter() - start
-        # print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
-        # print()
-        # GEMM backward propaAGNNion.
         d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
         return d_input, d_weights, None, None, None, None, None, None, None, None
 
-class TCGNNFunctionFixed32(torch.autograd.Function):
+class HyGNNFunctionFixed32(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-        
         X_prime = torch.mm(X, weights)
-        
-        # torch.cuda.synchronize()
-        # start = time.perf_counter()
 
         X_prime = HYGNN.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        # X_prime = HYGNN.forward_fixed64(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
         
         return X_prime
 
     @staticmethod
     def backward(ctx, d_output):
 
-        # torch.cuda.synchronize()
-        # start = time.perf_counter()
-
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
-        
-        torch.cuda.synchronize()
-        start = time.perf_counter()
 
         tmp = HYGNN.forward_fixed32_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1))
         d_input, d_input_prime = tmp[0], tmp[1]
-        # d_input_prime = HYGNN.forward_fixed32(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         
-        # d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
 
-class TCGNNFunctionFinal(torch.autograd.Function):
+class HyGNNFunctionFinal(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
         
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-        
         X_prime = torch.mm(X, weights)
         X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0] # 最后一层维度是class数量
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return X_prime
 
     @staticmethod
     def backward(ctx, d_output):
 
-        # torch.cuda.synchronize()
-        # start = time.perf_counter()
-
-
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output = ctx.saved_tensors
         
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
         tmp = HYGNN.forward_final_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1), output) # 最后一层是维度是class数量: node * class * hidden
         # d_input_prime = HYGNN.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_input, d_input_prime = tmp[0], tmp[1]
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
         # print(d_input[0])
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return d_input, d_weights, None, None, None, None, None, None, None, None, None
 
-class TCGNNFunctionFirst(torch.autograd.Function):
+class HyGNNFunctionFirst(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-        
-        torch.cuda.synchronize()
-        start = time.perf_counter()
 
         X_prime = torch.mm(X, weights)
         # print(weights.shape, X_prime.shape)
         X_prime = HYGNN.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # X_prime = HYGNN.forward_fixed64(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return X_prime
 
@@ -218,9 +162,6 @@ class TCGNNFunctionFirst(torch.autograd.Function):
         # start = time.perf_counter()
         # print(d_output.shape)
 
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
         d_input_prime = HYGNN.forward_fixed32(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # d_input_prime = HYGNN.forward_fixed64(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # dur = time.perf_counter() - start
@@ -232,73 +173,39 @@ class TCGNNFunctionFirst(torch.autograd.Function):
         
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
         
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
-        
         return d_input, d_weights, None, None, None, None, None, None, None, None
 
 #################### GIN #######################
 
-class TCGNNFunction_GINFixed32(torch.autograd.Function):
+class HyGNNFunction_GINFixed32(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
-
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
-        # SpMM: Neighbor AggreAGNNion.
         tmp = HYGNN.forward_fixed32_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
         X_prime_new, X_prime = tmp[0], tmp[1]
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-
-        # GEMM node update
-        # X_prime = torch.mm(X_prime_new, weights)
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
-
         return X_prime_new
 
     @staticmethod
     def backward(ctx, d_output):
         X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
 
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
-        # GEMM backward propaAGNNion.
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        # SPMM backward propaAGNNion.
         d_input = HYGNN.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
 
-class TCGNNFunction_GINFirst(torch.autograd.Function):
+class HyGNNFunction_GINFirst(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
 
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
-        # SpMM: Neighbor AggreAGNNion.
         X_prime = HYGNN.forward(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 
-        # GEMM node update
         X_prime = torch.mm(X_prime, weights)
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return X_prime
 
@@ -306,42 +213,24 @@ class TCGNNFunction_GINFirst(torch.autograd.Function):
     def backward(ctx, d_output):
         X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
 
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
-        # GEMM backward propaAGNNion.
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        # SPMM backward propaAGNNion.
         d_input = HYGNN.forward(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
 
-class TCGNNFunction_GINFinal(torch.autograd.Function):
+class HyGNNFunction_GINFinal(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
-        
-        torch.cuda.synchronize()
-        start = time.perf_counter()
 
-        # SpMM: Neighbor AggreAGNNion.
         # X_prime = HYGNN.forward_fixed32(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         tmp = HYGNN.forward_GIN_final_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
         X_prime_new, X_prime = tmp[0], tmp[1]
         # print(X_prime.shape, weights.shape, X_prime_new.shape)
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-        # GEMM node update
         # X_prime = torch.mm(X_prime, weights)
-        
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return X_prime_new
 
@@ -349,19 +238,10 @@ class TCGNNFunction_GINFinal(torch.autograd.Function):
     def backward(ctx, d_output):
         X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
 
-        torch.cuda.synchronize()
-        start = time.perf_counter()
-
-        # GEMM backward propaAGNNion.
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        # SPMM backward propaAGNNion.
         d_input = HYGNN.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-
-        torch.cuda.synchronize()
-        dur = time.perf_counter() - start
-        print("=> Backward aggregation (ms): {:.3f}".format(dur*1e3))
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
@@ -390,7 +270,7 @@ class SAG(torch.nn.Module):
         start = time.perf_counter()
 
         for _ in tqdm(range(num_rounds)):
-            TCGNNFunction_SAG.apply(X, self.row_pointers, self.column_index, \
+            HyGNNFunction_SAG.apply(X, self.row_pointers, self.column_index, \
                                         self.blockPartition, self.edgeToColumn, self.edgeToRow, self.hybrid_type, self.row_nzr, self.col_nzr)
         torch.cuda.synchronize()
         dur = time.perf_counter() - start
@@ -409,19 +289,13 @@ class GCNConv(torch.nn.Module):
         self.weights.data.uniform_(-stdv, stdv)
 
     def forward(self, X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
-        '''
-        @param:
-        X:  the input tensor of the graph node embedding, shape: [n_nodes, n_dim].
-        A:  the CSR node pointer of the graph, shape: [node, 1].
-        edges: the CSR edge list of the graph, shape: [edge, 1].
-        partitioin: for the graph with the part-based optimziation.
-        '''
-        if self.fixed == 0: # 指中间层
-            return TCGNNFunctionFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-        elif self.fixed == 2: # 指最后一层
-            return TCGNNFunctionFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
-        else: # 指第一层
-            return TCGNNFunctionFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+
+        if self.fixed == 0:
+            return HyGNNFunctionFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+        elif self.fixed == 2: 
+            return HyGNNFunctionFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
+        else:
+            return HyGNNFunctionFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 
 
 class GINConv(torch.nn.Module):
@@ -436,16 +310,9 @@ class GINConv(torch.nn.Module):
         self.weights.data.uniform_(-stdv, stdv)
 
     def forward(self, X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
-        '''
-        @param:
-        X:  the input tensor of the graph node embedding, shape: [n_nodes, n_dim].
-        A:  the CSR node pointer of the graph, shape: [node, 1].
-        edges: the CSR edge list of the graph, shape: [edge, 1].
-        partitioin: for the graph with the part-based optimziation.
-        '''
-        if self.fixed == 0: # 指中间层
-            return TCGNNFunction_GINFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-        elif self.fixed == 2: # 指最后一层
-            return TCGNNFunction_GINFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-        else: # 指第一层
-            return TCGNNFunction_GINFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+        if self.fixed == 0: 
+            return HyGNNFunction_GINFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+        elif self.fixed == 2: 
+            return HyGNNFunction_GINFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+        else: 
+            return HyGNNFunction_GINFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
