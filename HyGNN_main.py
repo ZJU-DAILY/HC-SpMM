@@ -28,7 +28,7 @@ args = parser.parse_args()
 print(args)
 
 dataset = args.dataset
-path = osp.join("../", dataset + ".txt")
+path = osp.join("./Dataset/", dataset + ".txt")
 dataset = HYGNN_dataset(path, args.dim, args.classes, load_from_txt=True)
 num_nodes = dataset.num_nodes
 num_edges = dataset.num_edges
