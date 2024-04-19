@@ -63,24 +63,10 @@ class HyGNNFunction(torch.autograd.Function):
         # X = torch.sparse.mm(edge_coo, X)
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         real_embedding_dim = rd
-        # GEMM node update
-        # start = time.perf_counter()
+
         X_prime = torch.mm(X, weights)
-        # print(X.shape, weights.shape, X_prime.shape)
-        # torch.cuda.synchronize()
-        # dur = time.perf_counter() - start
-        # print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
-        # print()
-        # X_prime_t = torch.ones_like(X_prime)
-        # X_prime_t = gen_test_tensor(X_prime)
-        # print("=========Before AggreAGNNion========")
-        # print(X_prime_t)
-        # sys.exit(0)
-        # SpMM: Neighbor AggreAGNNion.
+        
         X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        # print("==========After Aggreation=========")
-        # print(X_prime)
-        # sys.exit(0)
 
         return X_prime
 
@@ -122,7 +108,7 @@ class HyGNNFunctionFinal(torch.autograd.Function):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
         
         X_prime = torch.mm(X, weights)
-        X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0] # 最后一层维度是class数量
+        X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return X_prime
 
@@ -131,7 +117,7 @@ class HyGNNFunctionFinal(torch.autograd.Function):
 
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output = ctx.saved_tensors
         
-        tmp = HYGNN.forward_final_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1), output) # 最后一层是维度是class数量: node * class * hidden
+        tmp = HYGNN.forward_final_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1), output)
         # d_input_prime = HYGNN.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_input, d_input_prime = tmp[0], tmp[1]
@@ -246,9 +232,7 @@ class HyGNNFunction_GINFinal(torch.autograd.Function):
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
 
-###################################
-# Definition of each conv layers
-###################################
+
 class SAG(torch.nn.Module):
     def __init__(self, row_pointers, column_index, \
                     blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
