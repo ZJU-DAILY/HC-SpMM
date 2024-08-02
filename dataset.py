@@ -5,12 +5,12 @@ import time
 from config import *
 from scipy.sparse import *
 
-class HYGNN_dataset(torch.nn.Module):
+class HCSPMM_dataset(torch.nn.Module):
     """
     data loading for more graphs
     """
     def __init__(self, path, dim, num_class, load_from_txt=True, verbose=False):
-        super(HYGNN_dataset, self).__init__()
+        super(HCSPMM_dataset, self).__init__()
 
         self.nodes = set()
 
