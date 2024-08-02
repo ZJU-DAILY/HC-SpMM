@@ -10,7 +10,7 @@ torchaudio==0.8.0
 # Compiling
 Enter the folder ```hybrid_kernel``` and run ```sudo python setup.py install``` to compile and install the SpMM kernels of HC-SpMM. 
 
-# Run HyGNN
+# Run HC-SpMM
 Go back to the folder ```HC-SpMM``` and run ```python HC-SpMM_main.py --dataset example --model gcn``` to start the GCN training on the dataset ```example```. There are 8 parameters that can be customized. The detailed information is listed below: 
 ```
 --dataset: the training dataset which uses the COO format to represent the graph
