@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from tqdm import *
 import torch.cuda as cuda
 
-import HYGNN
+import HCSPMM
 from dataset import *
 from GNN_model import *
 from config import *
@@ -29,7 +29,7 @@ print(args)
 
 dataset = args.dataset
 path = osp.join("./Dataset/", dataset + ".txt")
-dataset = HYGNN_dataset(path, args.dim, args.classes, load_from_txt=True)
+dataset = HCSPMM_dataset(path, args.dim, args.classes, load_from_txt=True)
 num_nodes = dataset.num_nodes
 num_edges = dataset.num_edges
 column_index =  dataset.column_index 
@@ -45,7 +45,7 @@ col_nzr = torch.zeros(16 * num_row_windows, dtype=torch.int)
 output = torch.zeros(num_nodes * args.hidden, dtype=torch.float).reshape(num_nodes, args.hidden)
 
 start = time.perf_counter()
-HYGNN.preprocess(column_index, row_pointers, num_nodes,  \
+HCSPMM.preprocess(column_index, row_pointers, num_nodes,  \
                 BLK_H,	BLK_W, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 build_neighbor_parts = time.perf_counter() - start
 print("Prep. (ms):\t{:.3f}".format(build_neighbor_parts*1e3))
