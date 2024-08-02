@@ -4,7 +4,7 @@ import math
 import time 
 
 from tqdm.std import tqdm
-import HYGNN
+import HCSPMM
 
 n_heads = 1
 n_output = 8
@@ -23,7 +23,7 @@ def gen_test_tensor(X_prime):
     return X_new
 
 
-class HyGNNFunction_SAG(torch.autograd.Function):
+class HCSPMMFunction_SAG(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, row_pointers, column_index, \
                 blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
@@ -36,7 +36,7 @@ class HyGNNFunction_SAG(torch.autograd.Function):
         # start = time.perf_counter()
 
         # Basic Scatter and Gather
-        X_out = HYGNN.forward_fixed32(X, row_pointers, column_index, \
+        X_out = HCSPMM.forward_fixed32(X, row_pointers, column_index, \
                                 blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         # torch.cuda.synchronize()
@@ -51,13 +51,13 @@ class HyGNNFunction_SAG(torch.autograd.Function):
             blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
         real_embedding_dim = rd
         # SAG backward.
-        d_input = HYGNN.forward(d_output, row_pointers, column_index, \
+        d_input = HCSPMM.forward(d_output, row_pointers, column_index, \
                                 blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, real_embedding_dim)[0]
 
         return d_input, None, None, None, None, None, None
 
 
-class HyGNNFunction(torch.autograd.Function):
+class HCSPMMFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         # X = torch.sparse.mm(edge_coo, X)
@@ -66,7 +66,7 @@ class HyGNNFunction(torch.autograd.Function):
 
         X_prime = torch.mm(X, weights)
         
-        X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        X_prime = HCSPMM.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return X_prime
 
@@ -74,19 +74,19 @@ class HyGNNFunction(torch.autograd.Function):
     def backward(ctx, d_output):
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
         real_embedding_dim = rd
-        d_input_prime = HYGNN.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        d_input_prime = HCSPMM.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
         return d_input, d_weights, None, None, None, None, None, None, None, None
 
-class HyGNNFunctionFixed32(torch.autograd.Function):
+class HCSPMMFunctionFixed32(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         
         X_prime = torch.mm(X, weights)
 
-        X_prime = HYGNN.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        X_prime = HCSPMM.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         
         return X_prime
 
@@ -95,20 +95,20 @@ class HyGNNFunctionFixed32(torch.autograd.Function):
 
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = ctx.saved_tensors
 
-        tmp = HYGNN.forward_fixed32_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1))
+        tmp = HCSPMM.forward_fixed32_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1))
         d_input, d_input_prime = tmp[0], tmp[1]
         
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
 
-class HyGNNFunctionFinal(torch.autograd.Function):
+class HCSPMMFunctionFinal(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
         
         X_prime = torch.mm(X, weights)
-        X_prime = HYGNN.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        X_prime = HCSPMM.forward(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return X_prime
 
@@ -117,8 +117,8 @@ class HyGNNFunctionFinal(torch.autograd.Function):
 
         X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output = ctx.saved_tensors
         
-        tmp = HYGNN.forward_final_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1), output)
-        # d_input_prime = HYGNN.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        tmp = HCSPMM.forward_final_fused(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights.transpose(0, 1), output)
+        # d_input_prime = HCSPMM.forward(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # d_input = torch.mm(d_input_prime, weights.transpose(0,1))
         d_input, d_input_prime = tmp[0], tmp[1]
         d_weights = torch.mm(X.transpose(0,1), d_input_prime)
@@ -126,15 +126,15 @@ class HyGNNFunctionFinal(torch.autograd.Function):
 
         return d_input, d_weights, None, None, None, None, None, None, None, None, None
 
-class HyGNNFunctionFirst(torch.autograd.Function):
+class HCSPMMFunctionFirst(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
         ctx.save_for_backward(X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 
         X_prime = torch.mm(X, weights)
         # print(weights.shape, X_prime.shape)
-        X_prime = HYGNN.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        # X_prime = HYGNN.forward_fixed64(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        X_prime = HCSPMM.forward_fixed32(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        # X_prime = HCSPMM.forward_fixed64(X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return X_prime
 
@@ -148,8 +148,8 @@ class HyGNNFunctionFirst(torch.autograd.Function):
         # start = time.perf_counter()
         # print(d_output.shape)
 
-        d_input_prime = HYGNN.forward_fixed32(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        # d_input_prime = HYGNN.forward_fixed64(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        d_input_prime = HCSPMM.forward_fixed32(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        # d_input_prime = HCSPMM.forward_fixed64(d_output, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
         # dur = time.perf_counter() - start
         # print("=> Forward aggregation (ms): {:.3f}".format(dur*1e3))
 
@@ -163,10 +163,10 @@ class HyGNNFunctionFirst(torch.autograd.Function):
 
 #################### GIN #######################
 
-class HyGNNFunction_GINFixed32(torch.autograd.Function):
+class HCSPMMFunction_GINFixed32(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
-        tmp = HYGNN.forward_fixed32_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
+        tmp = HCSPMM.forward_fixed32_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
         X_prime_new, X_prime = tmp[0], tmp[1]
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         return X_prime_new
@@ -178,16 +178,16 @@ class HyGNNFunction_GINFixed32(torch.autograd.Function):
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        d_input = HYGNN.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        d_input = HCSPMM.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
 
-class HyGNNFunction_GINFirst(torch.autograd.Function):
+class HCSPMMFunction_GINFirst(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
 
-        X_prime = HYGNN.forward(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        X_prime = HCSPMM.forward(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 
@@ -202,17 +202,17 @@ class HyGNNFunction_GINFirst(torch.autograd.Function):
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        d_input = HYGNN.forward(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        d_input = HCSPMM.forward(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
 
-class HyGNNFunction_GINFinal(torch.autograd.Function):
+class HCSPMMFunction_GINFinal(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr):
 
-        # X_prime = HYGNN.forward_fixed32(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
-        tmp = HYGNN.forward_GIN_final_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
+        # X_prime = HCSPMM.forward_fixed32(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        tmp = HCSPMM.forward_GIN_final_fused(X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, weights)
         X_prime_new, X_prime = tmp[0], tmp[1]
         # print(X_prime.shape, weights.shape, X_prime_new.shape)
         ctx.save_for_backward(X_prime, weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
@@ -227,7 +227,7 @@ class HyGNNFunction_GINFinal(torch.autograd.Function):
         d_X_prime = torch.mm(d_output, weights.transpose(0,1))
         d_weights = torch.mm(X_prime.transpose(0,1), d_output)  
 
-        d_input = HYGNN.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
+        d_input = HCSPMM.forward_fixed32(d_X_prime, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)[0]
 
         return d_input, d_weights, None, None, None, None, None, None, None, None
         # return None, d_weights, None, None, None, None, None, None
@@ -254,7 +254,7 @@ class SAG(torch.nn.Module):
         start = time.perf_counter()
 
         for _ in tqdm(range(num_rounds)):
-            HyGNNFunction_SAG.apply(X, self.row_pointers, self.column_index, \
+            HCSPMMFunction_SAG.apply(X, self.row_pointers, self.column_index, \
                                         self.blockPartition, self.edgeToColumn, self.edgeToRow, self.hybrid_type, self.row_nzr, self.col_nzr)
         torch.cuda.synchronize()
         dur = time.perf_counter() - start
@@ -275,11 +275,11 @@ class GCNConv(torch.nn.Module):
     def forward(self, X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
 
         if self.fixed == 0:
-            return HyGNNFunctionFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+            return HCSPMMFunctionFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         elif self.fixed == 2: 
-            return HyGNNFunctionFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
+            return HCSPMMFunctionFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output)
         else:
-            return HyGNNFunctionFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+            return HCSPMMFunctionFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
 
 
 class GINConv(torch.nn.Module):
@@ -295,8 +295,8 @@ class GINConv(torch.nn.Module):
 
     def forward(self, X, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr, output):
         if self.fixed == 0: 
-            return HyGNNFunction_GINFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+            return HCSPMMFunction_GINFixed32.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         elif self.fixed == 2: 
-            return HyGNNFunction_GINFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+            return HCSPMMFunction_GINFinal.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
         else: 
-            return HyGNNFunction_GINFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
+            return HCSPMMFunction_GINFirst.apply(X, self.weights, row_pointers, column_index, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
