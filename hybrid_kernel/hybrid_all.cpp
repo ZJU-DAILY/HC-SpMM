@@ -608,25 +608,25 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("preprocess", &preprocess, "Preprocess Step (CPU)");
 
   // forward computation
-  m.def("forward", &spmm_forward, "HyGNN SPMM forward (CUDA)");
-  m.def("forward_more", &spmm_forward_more, "HyGNN SPMM forward more (CUDA)");
-  m.def("forward_fixed32", &spmm_forward_fixed32, "HyGNN SPMM forward fixed32 (CUDA)");
-  m.def("forward_fixed32_fused", &spmm_forward_fixed32_fused, "HyGNN SPMM forward fixed32 fused (CUDA)");
-  m.def("forward_final_fused", &spmm_forward_final_fused, "HyGNN SPMM forward final fused (CUDA)");
-  m.def("forward_fixed64", &spmm_forward_fixed64, "HyGNN SPMM forward fixed64 (CUDA)");
-  m.def("forward_fixed64_fused", &spmm_forward_fixed64_fused, "HyGNN SPMM forward fixed64 fused (CUDA)");
-  m.def("forward_final_fused_64", &spmm_forward_final_fused_64, "HyGNN SPMM forward final fused 64 (CUDA)");
-  m.def("forward_GIN_final_fused", &spmm_forward_GIN_final_fused, "HyGNN SPMM forward for GIN final fused (CUDA)");
-//   m.def("forward_fixed32_fused_all", &spmm_forward_fixed32_fused_all, "HyGNN SPMM forward fixed32 fused all (CUDA)");
+  m.def("forward", &spmm_forward, "HCSPMM SPMM forward (CUDA)");
+  m.def("forward_more", &spmm_forward_more, "HCSPMM SPMM forward more (CUDA)");
+  m.def("forward_fixed32", &spmm_forward_fixed32, "HCSPMM SPMM forward fixed32 (CUDA)");
+  m.def("forward_fixed32_fused", &spmm_forward_fixed32_fused, "HCSPMM SPMM forward fixed32 fused (CUDA)");
+  m.def("forward_final_fused", &spmm_forward_final_fused, "HCSPMM SPMM forward final fused (CUDA)");
+  m.def("forward_fixed64", &spmm_forward_fixed64, "HCSPMM SPMM forward fixed64 (CUDA)");
+  m.def("forward_fixed64_fused", &spmm_forward_fixed64_fused, "HCSPMM SPMM forward fixed64 fused (CUDA)");
+  m.def("forward_final_fused_64", &spmm_forward_final_fused_64, "HCSPMM SPMM forward final fused 64 (CUDA)");
+  m.def("forward_GIN_final_fused", &spmm_forward_GIN_final_fused, "HCSPMM SPMM forward for GIN final fused (CUDA)");
+//   m.def("forward_fixed32_fused_all", &spmm_forward_fixed32_fused_all, "HCSPMM SPMM forward fixed32 fused all (CUDA)");
 
   // backward
-  m.def("backward", &spmm_forward, "HyGNN SPMM backward (CUDA)");
-  m.def("backward_fixed32", &spmm_forward_fixed32, "HyGNN SPMM backward fixed32 (CUDA)");
-  m.def("backward_fixed32_fused", &spmm_forward_fixed32_fused, "HyGNN SPMM backward fixed32 fused (CUDA)");
-  m.def("backward_final_fused", &spmm_forward_final_fused, "HyGNN SPMM backward final fused (CUDA)");
-  m.def("backward_fixed64", &spmm_forward_fixed64, "HyGNN SPMM backward fixed 64 (CUDA)");
-  m.def("backward_fixed64_fused", &spmm_forward_fixed64_fused, "HyGNN SPMM backward fixed 64 fused (CUDA)");
-  m.def("backward_final_fused_64", &spmm_forward_final_fused_64, "HyGNN SPMM backward final fused 64 (CUDA)");
-  m.def("backward_GIN_final_fused", &spmm_forward_GIN_final_fused, "HyGNN SPMM backward for GIN final fused (CUDA)");
-//   m.def("backward_fixed32_fused_all", &spmm_forward_fixed32_fused_all, "HyGNN SPMM backward fixed32 fused all (CUDA)");
+  m.def("backward", &spmm_forward, "HCSPMM SPMM backward (CUDA)");
+  m.def("backward_fixed32", &spmm_forward_fixed32, "HCSPMM SPMM backward fixed32 (CUDA)");
+  m.def("backward_fixed32_fused", &spmm_forward_fixed32_fused, "HCSPMM SPMM backward fixed32 fused (CUDA)");
+  m.def("backward_final_fused", &spmm_forward_final_fused, "HCSPMM SPMM backward final fused (CUDA)");
+  m.def("backward_fixed64", &spmm_forward_fixed64, "HCSPMM SPMM backward fixed 64 (CUDA)");
+  m.def("backward_fixed64_fused", &spmm_forward_fixed64_fused, "HCSPMM SPMM backward fixed 64 fused (CUDA)");
+  m.def("backward_final_fused_64", &spmm_forward_final_fused_64, "HCSPMM SPMM backward final fused 64 (CUDA)");
+  m.def("backward_GIN_final_fused", &spmm_forward_GIN_final_fused, "HCSPMM SPMM backward for GIN final fused (CUDA)");
+//   m.def("backward_fixed32_fused_all", &spmm_forward_fixed32_fused_all, "HCSPMM SPMM backward fixed32 fused all (CUDA)");
 }
