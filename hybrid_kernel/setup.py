@@ -4,7 +4,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 setup(
     name='HCSPMM',
     ext_modules=[
-        CUDAExtension('HYGNN', [
+        CUDAExtension('HCSPMM', [
             'hybrid_all.cpp',
             'hybrid_all_kernel.cu',
         ], extra_compile_args=['-lcublas'])
