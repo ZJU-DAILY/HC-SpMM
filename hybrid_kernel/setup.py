@@ -2,7 +2,7 @@ from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 setup(
-    name='HYGNN',
+    name='HCSPMM',
     ext_modules=[
         CUDAExtension('HYGNN', [
             'hybrid_all.cpp',
