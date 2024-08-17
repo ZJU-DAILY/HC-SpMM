@@ -2537,7 +2537,6 @@ __global__ void spmm_forward_cuda_kernel_arbi_warps_hybrid_GIN_final_fused(
     wmma::fill_fragment(acc_frag, 0.0f);
     
     for(int i = 0; i < windows_size; i++){
-        // 加载weights到sparse_A中：8*hidden_embedding_dim
         for(int j = wid; j < BLK_W; j += WPB){
             unsigned source_idx = (i * BLK_W + j) * hidden_dim + laneid;
             unsigned target_idx = j + laneid * BLK_W;
