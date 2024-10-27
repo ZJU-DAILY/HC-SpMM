@@ -36,29 +36,22 @@ column_index =  dataset.column_index
 row_pointers = dataset.row_pointers
 
 num_row_windows = (num_nodes + BLK_H - 1) // BLK_H
-edgeToColumn = torch.zeros(num_edges, dtype=torch.int)
-edgeToRow = torch.zeros(num_edges, dtype=torch.int)
-blockPartition = torch.zeros(num_row_windows, dtype=torch.int)
-hybrid_type = torch.zeros(num_row_windows, dtype=torch.int)
-row_nzr = torch.zeros(num_row_windows + 1, dtype=torch.int)
-col_nzr = torch.zeros(16 * num_row_windows, dtype=torch.int)
+# edgeToColumn = torch.zeros(num_edges, dtype=torch.int)
+# edgeToRow = torch.zeros(num_edges, dtype=torch.int)
+# blockPartition = torch.zeros(num_row_windows, dtype=torch.int)
+# hybrid_type = torch.zeros(num_row_windows, dtype=torch.int)
+# row_nzr = torch.zeros(num_row_windows + 1, dtype=torch.int)
+# col_nzr = torch.zeros(16 * num_row_windows, dtype=torch.int)
 output = torch.zeros(num_nodes * args.hidden, dtype=torch.float).reshape(num_nodes, args.hidden)
-
-start = time.perf_counter()
-HCSPMM.preprocess(column_index, row_pointers, num_nodes,  \
-                BLK_H,	BLK_W, blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr)
-build_neighbor_parts = time.perf_counter() - start
-print("Prep. (ms):\t{:.3f}".format(build_neighbor_parts*1e3))
 
 column_index = column_index.cuda()
 row_pointers = row_pointers.cuda()
-blockPartition = blockPartition.cuda()
-edgeToColumn = edgeToColumn.cuda()
-edgeToRow = edgeToRow.cuda()
-hybrid_type = hybrid_type.cuda()
-row_nzr = row_nzr.cuda()
-col_nzr = col_nzr.cuda()
 output = output.cuda()
+
+start = time.perf_counter()
+blockPartition, edgeToColumn, edgeToRow, hybrid_type, row_nzr, col_nzr = HYGNN.preprocess(column_index, row_pointers, num_nodes, num_edges, num_row_windows)
+build_neighbor_parts = time.perf_counter() - start
+print("Prep. (ms):\t{:.3f}".format(build_neighbor_parts*1e3))
 
 if args.single_kernel:
     SAG_obj = SAG(row_pointers, column_index,\
