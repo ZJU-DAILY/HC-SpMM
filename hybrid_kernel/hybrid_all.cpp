@@ -10,6 +10,12 @@
 
 #define min(x, y) (((x) < (y))? (x) : (y))
 
+std::vector<torch::Tensor> preprocess(torch::Tensor edgeList_tensor, 
+                torch::Tensor nodePointer_tensor,
+                int num_nodes, 
+                int edge_num,
+                int block_num);
+
 std::vector<torch::Tensor> spmm_forward_plus(
     torch::Tensor input,
     torch::Tensor nodePointer,
@@ -491,121 +497,8 @@ std::vector<torch::Tensor> spmm_forward_GIN_final_fused(
                             );
 }
 
-// condense an sorted array with duplication: [1,2,2,3,4,5,5]
-// after condense, it becomes: [1,2,3,4,5].
-// Also, mapping the origin value to the corresponding new location in the new array.
-// 1->[0], 2->[1], 3->[2], 4->[3], 5->[4]. 
-std::map<unsigned, unsigned> inplace_deduplication(unsigned* array, unsigned length){
-    int loc=0, cur=1;
-    std::map<unsigned, unsigned> nb2col;
-    nb2col[array[0]] = 0;
-    while (cur < length){
-        if(array[cur] != array[cur - 1]){
-            loc++;
-            array[loc] = array[cur];
-            nb2col[array[cur]] = loc;       // mapping from eid to TC_block column index.[]
-        }
-        cur++;
-    }
-    return nb2col;
-}
-
-void preprocess(torch::Tensor edgeList_tensor, 
-                torch::Tensor nodePointer_tensor, 
-                int num_nodes, 
-                int blockSize_h,
-                int blockSize_w,
-                torch::Tensor blockPartition_tensor, 
-                torch::Tensor edgeToColumn_tensor,
-                torch::Tensor edgeToRow_tensor,
-                torch::Tensor hybrid_type_tensor,
-                torch::Tensor row_nzr_tensor,
-                torch::Tensor col_nzr_tensor
-                ){
-
-    // input tensors.
-    auto edgeList = edgeList_tensor.accessor<int, 1>();
-    auto nodePointer = nodePointer_tensor.accessor<int, 1>();
-
-    // output tensors.
-    auto blockPartition = blockPartition_tensor.accessor<int, 1>();
-    auto edgeToColumn = edgeToColumn_tensor.accessor<int, 1>();
-    auto edgeToRow = edgeToRow_tensor.accessor<int, 1>();
-    auto hybrid_type = hybrid_type_tensor.accessor<int, 1>();
-    auto row_nzr = row_nzr_tensor.accessor<int, 1>();
-    auto col_nzr = col_nzr_tensor.accessor<int, 1>();
-
-    unsigned block_counter = 0;
-    int csr_block_num = 0, tcu_block_num = 0, all_csr_k = 0, all_tcu_k = 0, max_k = 0, max_edges = 0;
-
-    #pragma omp parallel for 
-    for (unsigned nid = 0; nid < num_nodes; nid++){
-        for (unsigned eid = nodePointer[nid]; eid < nodePointer[nid+1]; eid++)
-            edgeToRow[eid] = nid;
-    }
-
-    #pragma omp parallel for reduction(+:block_counter)
-    for (unsigned iter = 0; iter < num_nodes + 1; iter +=  blockSize_h){
-        unsigned windowId = iter / blockSize_h;
-        unsigned block_start = nodePointer[iter];
-        unsigned block_end = nodePointer[min(iter + blockSize_h, num_nodes)];
-        unsigned num_window_edges = block_end - block_start;
-        unsigned *neighbor_window = (unsigned *) malloc (num_window_edges * sizeof(unsigned));
-        memcpy(neighbor_window, &edgeList[block_start], num_window_edges * sizeof(unsigned));
-
-        // Step-1: Sort the neighbor id array of a row window.
-        thrust::sort(neighbor_window, neighbor_window + num_window_edges);
-
-        // Step-2: Deduplication of the edge id array.
-        // printf("Before dedupblication: %d\n", num_window_edges);
-        std::map<unsigned, unsigned> clean_edges2col = inplace_deduplication(neighbor_window, num_window_edges);
-
-        // generate blockPartition --> number of TC_blcok in each row window.
-        blockPartition[windowId] = (clean_edges2col.size() + blockSize_w - 1) /blockSize_w;
-        block_counter += blockPartition[windowId];
-
-        // if((float)blockPartition[windowId] * 3.739 - 0.0328 * (float)num_window_edges - 12.61 > 0){
-        if(clean_edges2col.size() > 32 || (float)clean_edges2col.size() * 0.19854024 - ((float)num_window_edges / (blockPartition[windowId] * 16 * 8)) * 6.578043 - 3.14922857 > 0){
-            all_csr_k += blockPartition[windowId];
-            csr_block_num++;
-            hybrid_type[windowId] = 0;
-            if(num_window_edges > max_edges){
-                max_edges = num_window_edges;
-                // if(max_edges == 2388) printf("%d\n", windowId);
-            }
-        }
-        else{
-            all_tcu_k += blockPartition[windowId];
-            tcu_block_num++;
-            if(max_k < blockPartition[windowId]){
-                max_k = blockPartition[windowId];
-            }
-            hybrid_type[windowId] = 1;
-        }
-
-        for (unsigned e_index = block_start; e_index < block_end; e_index++){
-            unsigned eid = edgeList[e_index];
-            edgeToColumn[e_index] = clean_edges2col[eid];
-        }
-    }
-
-    int nzrn = 0;
-    for(int i = 0; i < num_nodes; i++){
-        if(nodePointer[i + 1] > nodePointer[i]){
-            col_nzr[nzrn++] = i;
-        }
-        if(i % blockSize_h == blockSize_h - 1){
-            row_nzr[i / blockSize_h + 1] = nzrn;
-        }
-    }
-    // row_nzr[num_nodes / blockSize_h + 1] = nzrn;
-    row_nzr[(num_nodes + blockSize_h - 1) / blockSize_h] = nzrn;
-
-    printf("TC_Blocks:\t%d\nExp_Edges:\t%d\nmax_k:\t%d\ncsr:\t%d\ntcu:\t%d\nmax_edges:\t%d\n", block_counter, block_counter * 8 * 16, max_k, csr_block_num, tcu_block_num, max_edges);
-}
-
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("preprocess", &preprocess, "Preprocess Step (CPU)");
+  m.def("preprocess", &preprocess, "Preprocess Step (GPU)");
 
   // forward computation
   m.def("forward", &spmm_forward, "HCSPMM SPMM forward (CUDA)");
