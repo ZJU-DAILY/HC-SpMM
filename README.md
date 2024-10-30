@@ -1,9 +1,9 @@
 # Environment Setup
-Our used CUDA version is 11.1.
+Our used CUDA version is 12.2.
 The Python packages and the corresponding versions required for HyGNN are as follows: 
 ```
-torch==1.8.0+cu111
-torchvision==0.9.0+cu111
+torch==1.8.0
+torchvision==0.9.0
 torchaudio==0.8.0
 ```
 
